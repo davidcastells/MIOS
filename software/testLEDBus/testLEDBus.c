@@ -34,9 +34,8 @@ void testLED()
 
         // we will do a sequence
         // n, a, b
-                __builtin_custom_inii(0, sa[i], sb[i]);
 
-		int v = sa[i] << 8 | sb[i];
+		int v = sb[i] << 8 | sa[i];
 		IOWR_32DIRECT(BASE_LEDS, 0, v);
                 i = (i+1) % 8;
         }
