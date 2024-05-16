@@ -6,6 +6,11 @@
 #define LF (1<<5)
 #define LG (1<<6)
 
+#define BASE_LEDS  0x21200
+
+#define IOWR_32DIRECT(base, offset, data) \
+    (*(volatile unsigned int *)((base) + (offset)) = (data))
+
 void testLED()
 {
         int sa[8];
@@ -30,6 +35,9 @@ void testLED()
         // we will do a sequence
         // n, a, b
                 __builtin_custom_inii(0, sa[i], sb[i]);
+
+		int v = sa[i] << 8 | sb[i];
+		IOWR_32DIRECT(BASE_LEDS, 0, v);
                 i = (i+1) % 8;
         }
 }
