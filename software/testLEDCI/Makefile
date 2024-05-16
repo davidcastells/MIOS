@@ -22,5 +22,5 @@ testLEDCI.disasm: testLEDCI.elf
 	$(OBJDUMP) -d testLEDCI.elf > testLEDCI.disasm
 
 testLEDCI.hex: testLEDCI.elf
-	$(ELF2HEX) testLEDCI.elf --width=8 --base=0x1054 --end=0x1144
+	$(ELF2HEX) testLEDCI.elf --width=8 --base=0x0 --end=0x144
 
