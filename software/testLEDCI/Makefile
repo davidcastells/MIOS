@@ -5,18 +5,22 @@ ELF2HEX=$(SOPC_KIT_NIOS2)/bin/elf2hex
 all: testLEDCI.elf
 
 clean:
-        rm *.elf
-        rm *.hex
+	rm -f *.elf
+	rm -f *.hex
+	rm -f *.disasm
 
 hex: testLEDCI.hex
 
+disasm: testLEDCI.disasm
+
 testLEDCI.elf: testLEDCI.c
-        $(CC) testLEDCI.c -o testLEDCI.elf -nostdlib
+	$(CC) testLEDCI.c -o testLEDCI.elf -ffunction-sections -T testLEDCI.ld -nostdlib
+	
 
 
 testLEDCI.disasm: testLEDCI.elf
-        $(OBJDUMP) -d testLEDCI.elf > testLEDCI.disasm
+	$(OBJDUMP) -d testLEDCI.elf > testLEDCI.disasm
 
 testLEDCI.hex: testLEDCI.elf
-        $(ELF2HEX) testLEDCI.elf --width=8 --base=0x1054 --end=0x1144
+	$(ELF2HEX) testLEDCI.elf --width=8 --base=0x1054 --end=0x1144
 
