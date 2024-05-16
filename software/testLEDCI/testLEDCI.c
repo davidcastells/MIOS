@@ -35,8 +35,7 @@ void testLED()
 }
 
 
-int _start()
+void _start()
 {
         testLED();
-        return 0;
 }
