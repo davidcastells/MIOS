@@ -115,7 +115,11 @@ class Mios(py4hw.Logic):
         
         
         self.cpuBus = self.addInterfaceSource('', cpuBus)
-        self.ciBus = self.addInterfaceSource('', ciBus)
+        
+        if not(ciBus is None):
+            self.ciBus = self.addInterfaceSource('', ciBus)
+        else:
+            self.ciBus = None
         
         self.pc = startAddress
         self.reg = [0] * 32
@@ -144,8 +148,10 @@ class Mios(py4hw.Logic):
     def clock(self):
         # obtain values gets
         self.vreaddata = self.cpuBus.readdata.get()
-        self.vdone = self.ciBus.done.get()
-        self.vr = self.ciBus.r.get()
+        
+        if not(self.ciBus is None):
+            self.vdone = self.ciBus.done.get()
+            self.vr = self.ciBus.r.get()
         
         next(self.co)
         
@@ -156,10 +162,11 @@ class Mios(py4hw.Logic):
         self.cpuBus.writedata.prepare(self.vwritedata)    
         self.cpuBus.be.prepare(self.vbe)    
         
-        self.ciBus.dataa.prepare(self.vdataa)
-        self.ciBus.datab.prepare(self.vdatab)
-        self.ciBus.n.prepare(self.vn)
-        self.ciBus.start.prepare(self.vstart)
+        if not(self.ciBus is None):
+            self.ciBus.dataa.prepare(self.vdataa)
+            self.ciBus.datab.prepare(self.vdatab)
+            self.ciBus.n.prepare(self.vn)
+            self.ciBus.start.prepare(self.vstart)
         
         
     def bitr(self, v, high, low):
@@ -281,6 +288,9 @@ class Mios(py4hw.Logic):
             elif (opx == 0x12):
                 # slli
                 self.reg[rc] = self.reg[ra] << imm5
+            elif (opx == 0x16):
+                # or
+                self.reg[rc] = self.reg[ra] | self.reg[rb]
             elif (opx == 0x20):
                 # cmpeq
                 if (self.reg[ra] == self.reg[rb]):
