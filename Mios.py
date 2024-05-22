@@ -3,6 +3,9 @@
 Created on Wed Feb  7 15:20:49 2024
 
 @author: dcr
+
+  Check info from https://www-ug.eecg.toronto.edu/msl/manuals/n2cpu_nii51017.pdf
+
 """
 
 import py4hw
@@ -109,7 +112,7 @@ class Mios(py4hw.Logic):
     '''
     This is a processor compatible with Altera NIOS2 ISA
     '''
-    def __init__(self, parent, name, cpuBus, ciBus, startAddress, stackPointer):
+    def __init__(self, parent, name, cpuBus, ciBus, startAddress, exceptionAddress, stackPointer=0):
         super().__init__(parent, name)
         
         
@@ -124,6 +127,11 @@ class Mios(py4hw.Logic):
         self.pc = startAddress
         self.reg = [0] * 32
         self.reg[27] = stackPointer
+        
+        self.ctl = [0] * 32 # Control Registers
+        
+        self.reset_address = startAddress
+        self.exception_address = exceptionAddress
         
         self.vaddress = 0
         self.vread = 0
@@ -178,20 +186,42 @@ class Mios(py4hw.Logic):
         self.vaddress = self.pc
         self.vread = 1
         self.vwrite = 0
+        self.vbe = 0xF
         
-        
+        yield
         yield
         self.ins = self.vreaddata
         self.vread = 0
-        
+
+    def storeByte(self, address, value):
+        self.vaddress = address & 0xFFFFFFFC
+        self.vread = 0
+        self.vwrite = 1
+        bit = (address & 0x3)
+        self.vwritedata = (value & 0xFF) << bit
+        self.vbe = 1 << bit
+        yield
+        self.vwrite = 0
+                
     def storeWord(self, address, value):
         assert(address % 4 == 0)
         self.vaddress = address
         self.vread = 0
         self.vwrite = 1
         self.vwritedata = value
+        self.vbe = 0xF
         yield
         self.vwrite = 0
+
+    def loadByte(self, address):
+        self.vaddress = address & 0xFFFFFFFC
+        self.vread = 1
+        self.vwrite = 0
+        bit = (address & 0x3)
+        yield
+        self.vread = 0
+        return (self.vreaddata >> bit) & 0xFF
+
         
     def loadWord(self, address):
         assert(address % 4 == 0)
@@ -241,13 +271,21 @@ class Mios(py4hw.Logic):
         if (op6 == 0x00):
             # call
             self.reg[31] = self.pc + 4
-            self.pc = (self.pc & 0xF0000000) + simm16 * 4
+            self.pc = (self.pc & 0xF0000000) + imm26 * 4
             yield
             return
         
+        if (op6 == 0x03):
+            # ldbu
+            self.reg[rb] = yield from self.loadByte(self.reg[ra] + simm16)
+            
         elif (op6 == 0x04):
             # addi
             self.reg[rb] = (self.reg[ra] + simm16) & 0xFFFFFFFF
+            
+        elif (op6 == 0x05):
+            # stb
+            yield from self.storeByte(self.reg[ra] + simm16, self.reg[rb])
             
         elif (op6 == 0x06):
             # br
@@ -255,6 +293,10 @@ class Mios(py4hw.Logic):
             yield
             return
         
+        elif (op6 == 0x0C):
+            # andi
+            self.reg[rb] = self.reg[ra] & imm16
+            
         elif (op6 == 0x0e):
             # bge
             if (py4hw.IntegerHelper.c2_to_signed(self.reg[ra], 32) >= py4hw.IntegerHelper.c2_to_signed(self.reg[rb], 32)):
@@ -262,13 +304,45 @@ class Mios(py4hw.Logic):
                 yield
                 return
             
+        elif (op6 == 0x14):
+            # ori
+            self.reg[rb] = self.reg[ra] | imm16
+            
         elif (op6 == 0x15):
             # stw
             yield from self.storeWord(self.reg[ra] + simm16, self.reg[rb])
-            
+        elif (op6 == 0x16):
+            # blt
+            if (py4hw.IntegerHelper.c2_to_signed(self.reg[ra], 32) < py4hw.IntegerHelper.c2_to_signed(self.reg[rb], 32)):
+                self.pc = self.pc + 4 + simm16
+                yield
+                return
+                
         elif (op6 == 0x17):
             # ldw
             self.reg[rb] = yield from self.loadWord(self.reg[ra] + simm16)
+            
+        elif (op6 == 0x1E):
+            # bne
+            if (self.reg[ra] != self.reg[rb]):
+                self.pc = self.pc + 4 + simm16
+                yield
+                return
+                
+
+        elif (op6 == 0x26):
+            # beq
+            if (self.reg[ra] == self.reg[rb]):
+                self.pc = self.pc + 4 + simm16
+                yield
+                return
+        elif (op6 == 0x28):
+            # cmpgeui
+            self.reg[rb] = 1 if (self.reg[ra] >= imm16) else 0
+            
+        elif (op6 == 0x2C):
+            # andhi
+            self.reg[rb] = self.reg[ra] & (imm16 << 16)
             
         elif (op6 == 0x32):
             # custom
@@ -278,29 +352,74 @@ class Mios(py4hw.Logic):
             n = self.bitr(v, 13, 6)
             yield from self.custom(ra, rb, rc, usea, useb, writec, n)
             
+        elif (op6 == 0x33):
+            # initd
+            pass
+            
         elif (op6 == 0x34):
             # orhi
             self.reg[rb] = self.reg[ra] | (imm16 << 16)
             
         elif (op6 == 0x3A):
-            if (opx == 0x0e):
+            if (opx == 0x05):
+                # ret
+                self.pc = self.reg[31]
+                yield
+                return
+                
+            elif (opx == 0x0e):
+                # and
                 self.reg[rc] = self.reg[ra] & self.reg[rb]
+                
             elif (opx == 0x12):
                 # slli
                 self.reg[rc] = self.reg[ra] << imm5
+                
             elif (opx == 0x16):
                 # or
                 self.reg[rc] = self.reg[ra] | self.reg[rb]
+                
+            elif (opx == 0x1A):
+                # srli
+                self.reg[rc] = self.reg[ra] >> imm5
+
+            elif (opx == 0x1C):
+                # nextpc
+                self.reg[rc] = self.pc + 4
+                
+            elif (opx == 0x1D):
+                # callr
+                self.reg[31] = self.pc + 4
+                self.pc = self.reg[ra]
+                yield
+                return
+                
             elif (opx == 0x20):
                 # cmpeq
                 if (self.reg[ra] == self.reg[rb]):
                     self.reg[rc] == 1
                 else:
                     self.reg[rc] == 0
+            elif (opx == 0x29):
+                # initi
+                pass
+            elif (opx == 0x2E):
+                # wrctl
+                self.ctl[imm5] = self.reg[ra]
+               
             elif (opx == 0x31):
+                # add
                 self.reg[rc] = self.reg[ra] + self.reg[rb]
+            elif (opx == 0x39):
+                # sub
+                self.reg[rc] = (self.reg[ra] - self.reg[rb]) & 0xFFFFFFFF
             else:
                 print('op=', hex(op6), 'opx=', hex(opx))
+                
+                
+        elif (op6 == 0x3B):
+            # flushd
+            pass
         else:
             print('op=', hex(op6), 'opx=', hex(opx))
         
