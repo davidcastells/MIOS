@@ -2,7 +2,7 @@
 NIOS compatible ISS in py4hw
 
 
-### Building SW
+### Building Bare-Metal SW
 
 Open a NIOS2 command shell
 
@@ -33,3 +33,14 @@ Run the tb_MiosBus script
 ```
 python tb_MiosBus.py
 ```
+
+
+### Running a Buildroot distribution
+
+Run the tb_MiosBuildroot script
+
+```
+python -i tb_MiosBuildroot.py
+```
+
+some functions can be called as an interactive command-line debugger (i.e. regs, step, tbreak, go, ...)
