@@ -248,7 +248,7 @@ avalonMux = Mios.AvalonMMMux(sys, 'mux', cpuBus,
 #SevenSegmentsDisplay(sys, 'N0', N0);
 
 
-niosii = Mios.Mios(sys, 'niosii', cpuBus, None, 0x0 , 0x4000 + 0x400 * 8)
+niosii = Mios.Mios(sys, 'niosii', cpuBus, None, 0x0 , 0x0, 0x4000 + 0x400 * 8)
 
 
 import HexFileParser
