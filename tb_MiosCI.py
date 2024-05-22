@@ -173,7 +173,7 @@ SevenSegmentsDisplay(sys, 'N1', N1);
 SevenSegmentsDisplay(sys, 'N0', N0);
 
 
-niosii = Mios.Mios(sys, 'niosii', cpuBus, ciBus, 0x0 , 0x4000 + 0x400 * 8)
+niosii = Mios.Mios(sys, 'niosii', cpuBus, ciBus, 0x0 , 0, 0x4000 + 0x400 * 8)
 
 
 import HexFileParser
