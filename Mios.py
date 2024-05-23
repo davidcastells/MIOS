@@ -45,6 +45,7 @@ class AvalonMMDecoder(py4hw.Logic):
         self.addIn('m0_write', master.write) 
         self.addIn('m0_read', master.read) 
         self.addIn('m0_writedata', master.writedata) 
+        self.addIn('m0_be', master.be)
         
         self.slaves = []
         self.bases = bases
@@ -58,6 +59,7 @@ class AvalonMMDecoder(py4hw.Logic):
             self.addOut(name+'_write', slave.write)
             self.addOut(name+'_read', slave.read)
             self.addOut(name+'_writedata', slave.writedata)
+            self.addOut(name+'_be', slave.be)
         
     def propagate(self):
         add = self.master.address.get()
@@ -70,12 +72,14 @@ class AvalonMMDecoder(py4hw.Logic):
                 self.slaves[idx].write.put(self.master.write.get())    
                 self.slaves[idx].read.put(self.master.read.get())    
                 self.slaves[idx].writedata.put(self.master.writedata.get())    
-                #self.master.readdata.put(self.slaves[idx].readdata.get())
+                self.slaves[idx].be.put(self.master.be.get())
+
             else:
                 self.slaves[idx].address.put(0)
                 self.slaves[idx].write.put(0)    
                 self.slaves[idx].read.put(0)    
                 self.slaves[idx].writedata.put(0)    
+                self.slaves[idx].be.put(0)
                 
 class AvalonMMMux(py4hw.Logic):
     def __init__(self, parent, name, master, slaves, bases, sizes):
@@ -197,9 +201,9 @@ class Mios(py4hw.Logic):
         self.vaddress = address & 0xFFFFFFFC
         self.vread = 0
         self.vwrite = 1
-        bit = (address & 0x3)
-        self.vwritedata = (value & 0xFF) << bit
-        self.vbe = 1 << bit
+        byte = (address & 0x3)
+        self.vwritedata = (value & 0xFF) << (byte*8)
+        self.vbe = 1 << byte
         yield
         self.vwrite = 0
                 
@@ -217,10 +221,10 @@ class Mios(py4hw.Logic):
         self.vaddress = address & 0xFFFFFFFC
         self.vread = 1
         self.vwrite = 0
-        bit = (address & 0x3)
+        byte = (address & 0x3)
         yield
         self.vread = 0
-        return (self.vreaddata >> bit) & 0xFF
+        return (self.vreaddata >> (byte * 8) ) & 0xFF
 
         
     def loadWord(self, address):
@@ -304,6 +308,10 @@ class Mios(py4hw.Logic):
                 yield
                 return
             
+        elif (op6 == 0x10):
+            # cmplti
+            self.reg[rb] = 1 if  (py4hw.IntegerHelper.c2_to_signed(self.reg[ra], 32) < simm16) else 0
+            
         elif (op6 == 0x14):
             # ori
             self.reg[rb] = self.reg[ra] | imm16
@@ -311,6 +319,7 @@ class Mios(py4hw.Logic):
         elif (op6 == 0x15):
             # stw
             yield from self.storeWord(self.reg[ra] + simm16, self.reg[rb])
+            
         elif (op6 == 0x16):
             # blt
             if (py4hw.IntegerHelper.c2_to_signed(self.reg[ra], 32) < py4hw.IntegerHelper.c2_to_signed(self.reg[rb], 32)):
@@ -322,6 +331,11 @@ class Mios(py4hw.Logic):
             # ldw
             self.reg[rb] = yield from self.loadWord(self.reg[ra] + simm16)
             
+        elif (op6 == 0x1C):
+            # ori
+            self.reg[rb] = self.reg[ra] ^ imm16
+            
+            
         elif (op6 == 0x1E):
             # bne
             if (self.reg[ra] != self.reg[rb]):
@@ -329,6 +343,9 @@ class Mios(py4hw.Logic):
                 yield
                 return
                 
+        elif (op6 == 0x24):
+            # muli
+            self.reg[rb] = (self.reg[ra] * simm16) & 0xFFFFFFFF
 
         elif (op6 == 0x26):
             # beq
